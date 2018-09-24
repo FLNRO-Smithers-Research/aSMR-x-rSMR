@@ -3,7 +3,7 @@
 ###Kiri Daust, July 2018
 
 ###Model aSMR <-> rSMR
-.libPaths("E:/R packages351")
+#.libPaths("E:/R packages351")
 rm(list=ls())
 require(tcltk)
 require(foreach)
@@ -288,6 +288,65 @@ Spp_aSMRcov <- cast(Veg_Env4, Species ~ aSMRC) #ignore message here casts to mat
 Spp_aSMR <- Spp_aSMR[,-c(19)]
 write.csv(Spp_aSMR, file= "Species_by_aSMR_grid_halfstep.csv")
 write.csv(Spp_aSMRcov, file= "Speciescover_by_aSMR_grid_halfstep.csv")
+
+###Start Kiri##############################
+####calculate percent
+Spp_CountPerc <- Spp_aSMR[,colnames(Spp_aSMR) != "NA"] ##remove NA
+Spp_CountPerc$Total <- rowSums(Spp_CountPerc[,-1])
+Spp_CountPerc[,!colnames(Spp_CountPerc) %in% c("Species","Total")] <- (Spp_CountPerc[,!colnames(Spp_CountPerc) %in% c("Species","Total")]/Spp_CountPerc$Total)*100
+
+###Now for %cover
+Spp_aSMRcov[is.na(Spp_aSMRcov)] <- 0 ####fill NA with 0
+Spp_CovPerc <- Spp_aSMRcov
+Spp_CovPerc$Total <- rowSums(Spp_CovPerc[,-1], na.rm = TRUE)
+Spp_CovPerc[,!colnames(Spp_CountPerc) %in% c("Species","Total")] <- (Spp_CovPerc[,!colnames(Spp_CountPerc) %in% c("Species","Total")]/Spp_CovPerc$Total)*100
+
+####Max, Min and Median values
+install.packages("modeest") ##package to calculate mode
+library(modeest)
+
+getStats <- function(data){
+  out <- as.data.frame(data$Species)
+  out$Max <- apply(data[,2:17], 1, FUN = max)
+  out$Min <- apply(data[,2:17], 1, FUN = min)
+  out$Mean <- apply(data[,2:17], 1, FUN = mean)
+  out$Median <- apply(data[,2:17], 1, FUN = median)
+  out$Mode <- apply(data[,2:17], 1, FUN = venter, k = 4)
+  colnames(out)[1] <- "Species"
+  return(out)
+}
+
+CountStats <- getStats(Spp_aSMR) ###ignore warnings - the mode estimator often has trouble converging
+CovStats <- getStats(Spp_aSMRcov)
+
+###Build Graphics
+choices <- as.character(Spp_aSMRcov$Species[rowSums(Spp_aSMRcov[,-1]) > 200]) ###only allow selection of species with certain abundance cutoff
+Spp <- select.list(choices, graphics = TRUE, multiple = TRUE) ###Select which species to plot (can choose multiple)
+
+temp <- as.data.frame(Spp_aSMRcov[Spp_aSMRcov$Species %in% Spp,])##subset for selected species
+rownames(temp) <- temp$Species
+temp <- temp[,-1]
+temp <- as.data.frame(t(temp))
+temp$Total <- rowSums(temp) ###Sum together if multiple species selected
+temp$aSMR <- rownames(temp)
+
+####Create bar plot of cover by aSMR
+ggplot(temp, aes(x = aSMR, y = Total))+
+  geom_bar(position = "dodge", stat = "identity")+
+  labs(y = "Cover", title = paste(Spp, collapse = ", "))
+
+###Fit gaussian curve to data (thanks to https://stats.stackexchange.com/questions/83022/how-to-fit-data-that-looks-like-a-gaussian)
+dat <- data.frame(x=as.numeric(as.character(temp$aSMR)), r=temp$Total)
+dat$r <- dat$r/sum(dat$r)###have to standardise
+
+g.fit <- nls(r ~ k*exp(-1/2*(x-mu)^2/sigma^2), start=c(mu=6,sigma=1,k=0.5) , data = dat)###Non-linear least-squares regression using gaussian formula
+
+v <- summary(g.fit)$parameters[,"Estimate"] ###v contains the three parameters for the best fit curve
+plot(r ~ x, data = dat, xlab = "aSMR", ylab = "Standardised Cover", main = paste(Spp, collapse = ", "))
+plot(function(x) v[3]*exp(-1/2*(x-v[1])^2/v[2]^2),col=2,add=T,xlim=range(dat$x)) ###plot distribution using optimised parameters
+
+####End Kiri#########
+
 #### build some summaries to look at species distribution by calculated aSMR
 Spp_aSMR[is.na(Spp_aSMR)] <- 0 ## ignore error messages here
 Spp_aSMR <-cbind(Spp_aSMR,rowSums(Spp_aSMR[,-c(1)]))
