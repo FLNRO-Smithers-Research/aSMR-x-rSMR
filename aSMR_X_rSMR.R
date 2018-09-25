@@ -305,6 +305,7 @@ Spp_CovPerc[,!colnames(Spp_CountPerc) %in% c("Species","Total")] <- (Spp_CovPerc
 install.packages("modeest") ##package to calculate mode
 library(modeest)
 
+####Not used##################
 getStats <- function(data){
   out <- as.data.frame(data$Species)
   out$Max <- apply(data[,2:17], 1, FUN = max)
@@ -315,9 +316,32 @@ getStats <- function(data){
   colnames(out)[1] <- "Species"
   return(out)
 }
+##############################################3
 
-CountStats <- getStats(Spp_aSMR) ###ignore warnings - the mode estimator often has trouble converging
-CovStats <- getStats(Spp_aSMRcov)
+temp <- melt(Spp_aSMRcov, id.vars = "Species")###to long format
+SppList <- as.character(unique(Spp_aSMRcov$Species))
+
+####Create stats for each species
+stats <- foreach(Spp = SppList, .combine = rbind) %do% {
+  SppSub <- temp[temp$Species == Spp,]###subset for species
+  mode <- SppSub$aSMRC[SppSub$value == max(SppSub$value)] ###Mode is aSMR at max value
+  SppSub$Integral <- cumsum(SppSub$value) ###cumulative sum
+  SppSub$StandValue <- (SppSub$value/sum(SppSub$value))*1000 ###standardise value
+  q1 <- 0.1*sum(SppSub$value)
+  q2 <- 0.9*sum(SppSub$value)
+  q10 <- SppSub$aSMRC[SppSub$Integral >= q1][1] ###aSMR value at 10% percentile
+  q90 <- SppSub$aSMRC[SppSub$Integral >= q2][1]###and 90%
+  
+  ###Caclulate standard deviation by repeating aSMR value by standardised cover value
+  s2 <- sd(c(rep(0.5,SppSub$StandValue[1]),rep(1,SppSub$StandValue[2]),rep(1.5,SppSub$StandValue[3]),rep(2,SppSub$StandValue[4]),
+           rep(2.5,SppSub$StandValue[5]),rep(3,SppSub$StandValue[6]),rep(3.5,SppSub$StandValue[7]),rep(4,SppSub$StandValue[8]),
+           rep(4.5,SppSub$StandValue[9]),rep(5,SppSub$StandValue[10]),rep(5.5,SppSub$StandValue[11]),rep(6,SppSub$StandValue[12]),
+           rep(6.5,SppSub$StandValue[13]),rep(7,SppSub$StandValue[14]),rep(7.5,SppSub$StandValue[15]),rep(8,SppSub$StandValue[16])))
+  
+  out <- data.frame(Species = Spp, Q10 = q10, Mode = mode, Q90 = q90, SD = s2)
+  out
+}
+
 
 ###Build Graphics
 choices <- as.character(Spp_aSMRcov$Species[rowSums(Spp_aSMRcov[,-1]) > 200]) ###only allow selection of species with certain abundance cutoff
@@ -327,19 +351,44 @@ temp <- as.data.frame(Spp_aSMRcov[Spp_aSMRcov$Species %in% Spp,])##subset for se
 rownames(temp) <- temp$Species
 temp <- temp[,-1]
 temp <- as.data.frame(t(temp))
-temp$Total <- rowSums(temp) ###Sum together if multiple species selected
 temp$aSMR <- rownames(temp)
+
+multSpp <- melt(temp, id.vars = "aSMR")###Create data set for doing multiple curves at once
+colnames(multSpp)[2:3] <- c("Species","Cover")
+
+temp$Total <- rowSums(temp[,-length(temp)]) ###Sum together if multiple species selected
+
 
 ####Create bar plot of cover by aSMR
 ggplot(temp, aes(x = aSMR, y = Total))+
   geom_bar(position = "dodge", stat = "identity")+
   labs(y = "Cover", title = paste(Spp, collapse = ", "))
 
-###Fit gaussian curve to data (thanks to https://stats.stackexchange.com/questions/83022/how-to-fit-data-that-looks-like-a-gaussian)
+####fit gaussian curves and plot on same graph######################
+plot(0,0, type = "n", xlim = c(1,8), ylim = c(0,0.4), xlab = "aSMR", ylab = "Standardised Cover")
+cols <- rainbow(length(Spp))
+
+for(i in 1:length(Spp)){
+  CurrSpp <- Spp[i]
+  datSub <- multSpp[multSpp$Species == CurrSpp,]
+  
+  dat <- data.frame(x=as.numeric(as.character(datSub$aSMR)), r=datSub[,3])
+  dat$r <- dat$r/sum(dat$r)###have to standardise
+  mu <- dat$x[dat$r == max(dat$r)] ###start optimisation at maximum so doesn't get stuck
+  
+  g.fit <- nls(r ~ k*exp(-1/2*(x-mu)^2/sigma^2), start=c(mu=mu,sigma=1,k=0.5) , data = dat)###Non-linear least-squares regression using gaussian formula
+  v <- summary(g.fit)$parameters[,"Estimate"] ###v contains the three parameters for the best fit curve
+  points(r ~ x, data = dat, pch = 4, col = cols[i])
+  plot(function(x) v[3]*exp(-1/2*(x-v[1])^2/v[2]^2),col=cols[i],add=T,xlim=range(dat$x))
+}
+legend("topright", Spp, col = cols, pch = 15, cex = 0.8)
+
+
+###Fit gaussian curve to total data (or one species) (thanks to https://stats.stackexchange.com/questions/83022/how-to-fit-data-that-looks-like-a-gaussian)
 dat <- data.frame(x=as.numeric(as.character(temp$aSMR)), r=temp$Total)
 dat$r <- dat$r/sum(dat$r)###have to standardise
 
-g.fit <- nls(r ~ k*exp(-1/2*(x-mu)^2/sigma^2), start=c(mu=6,sigma=1,k=0.5) , data = dat)###Non-linear least-squares regression using gaussian formula
+g.fit <- nls(r ~ k*exp(-1/2*(x-mu)^2/sigma^2), start=c(mu=3,sigma=1,k=0.5) , data = dat)###Non-linear least-squares regression using gaussian formula
 
 v <- summary(g.fit)$parameters[,"Estimate"] ###v contains the three parameters for the best fit curve
 plot(r ~ x, data = dat, xlab = "aSMR", ylab = "Standardised Cover", main = paste(Spp, collapse = ", "))
