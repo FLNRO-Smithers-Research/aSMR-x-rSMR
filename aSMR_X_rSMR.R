@@ -338,6 +338,10 @@ getStats <- function(data){
 ##############################################3
 
 temp <- melt(Spp_aSMRcov, id.vars = "Species")###to long format
+tempCount <- Spp_aSMR
+tempCount <- tempCount[,-18] ##remove NA column
+tempCount <- melt(tempCount, id.vars = "Species")
+tempCount <- tempCount[!is.na(tempCount$Species),]##remove NA species
 SppList <- as.character(unique(Spp_aSMRcov$Species))
 
 ####Create stats for each species
@@ -357,7 +361,10 @@ stats <- foreach(Spp = SppList, .combine = rbind) %do% {
            rep(4.5,SppSub$StandValue[9]),rep(5,SppSub$StandValue[10]),rep(5.5,SppSub$StandValue[11]),rep(6,SppSub$StandValue[12]),
            rep(6.5,SppSub$StandValue[13]),rep(7,SppSub$StandValue[14]),rep(7.5,SppSub$StandValue[15]),rep(8,SppSub$StandValue[16])))
   
-  out <- data.frame(Species = Spp, Q10 = q10, Mode = mode, Q90 = q90, SD = s2)
+  CountSub <- tempCount[tempCount$Species == Spp,]
+  numPlots <- sum(CountSub$value)
+  
+  out <- data.frame(Species = Spp, Q10 = q10, Mode = mode, Q90 = q90, SD = s2, NumPlots = numPlots)
   out
 }
 
@@ -384,7 +391,7 @@ ggplot(temp, aes(x = aSMR, y = Total))+
   labs(y = "Cover", title = paste(Spp, collapse = ", "))
 
 ####fit gaussian curves and plot on same graph######################
-plot(0,0, type = "n", xlim = c(1,8), ylim = c(0,0.4), xlab = "aSMR", ylab = "Standardised Cover")
+plot(0,0, type = "n", xlim = c(1,8), ylim = c(0,0.3), xlab = "aSMR", ylab = "Standardised Cover")
 cols <- rainbow(length(Spp))
 
 for(i in 1:length(Spp)){
