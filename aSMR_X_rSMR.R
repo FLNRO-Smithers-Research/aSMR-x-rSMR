@@ -317,6 +317,7 @@ aSMRCount <- count (plotEnv2, c("aSMRC")) #count of species occurrences by model
     load( "PlotEnv.RData")
   ############Add BGC and aSMR info to vegetation list data
 Veg_Env <- merge(vegData, plotEnv2, by = "PlotNumber", all.x = TRUE)
+Veg_Env <- Veg_Env[!is.na(Veg_Env$aSMRC),]
 Veg_Env <- Veg_Env[Veg_Env$BGC_LABEL != "",]
 #Veg_Env$aSMR <- as.factor(Veg_Env$aSMRC)
 #Veg_Env2 <- group_by(Veg_Env, Species, aSMR)
@@ -326,7 +327,7 @@ Veg_Env4 <- aggregate(Cover ~ Species + aSMRC, Veg_Env, sum) #sum of covers of s
 ############summarize species occurrences by aSMR category for determining indicator values
 Spp_aSMR <- cast(Veg_Env3, Species ~ aSMRC) #ignore message here casts to matrix
 Spp_aSMRcov <- cast(Veg_Env4, Species ~ aSMRC) #ignore message here casts to matrix
-Spp_aSMR <- Spp_aSMR[,-c(19)]
+
 write.csv(Spp_aSMR, file= "Species_by_aSMR_grid_halfstep.csv")
 write.csv(Spp_aSMRcov, file= "Speciescover_by_aSMR_grid_halfstep.csv")
 
@@ -349,7 +350,6 @@ Spp_CovPerc[,!colnames(Spp_CountPerc) %in% c("Species","Total")] <- (Spp_CovPerc
 
 temp <- melt(Spp_aSMRcov, id.vars = "Species")###to long format
 tempCount <- Spp_aSMR
-tempCount <- tempCount[,-18] ##remove NA column
 
 #tempCount <- melt(tempCount, id.vars = "Species")
 tempCount <- tempCount[!is.na(tempCount$Species),]##remove NA species
@@ -390,7 +390,7 @@ write.csv(stats, "Species_aSMR_Statistics.csv")
 choices <- as.character(tempCount$Species[rowSums(tempCount[,-1]) > 200]) ###only allow selection of species with certain abundance cutoff
 Spp <- select.list(choices, graphics = TRUE, multiple = TRUE) ###Select which species to plot (can choose multiple)
 #Spp <- c("ABIEAMA", "ABIEGRA","ABIELAS","LARIOCC", "PINUCON", "PINUPON","PSEUMEN","PICEENE","THUJPLI","TSUGHET")
-#Spp <- c("PETAFRI", "MAIADIL","OPLOHOR")#Moist5
+Spp <- c("PETAFRI", "MAIADIL","OPLOHOR")#Moist5
 Spp <- c("LYSIAME", "MENYTRI",  "SPHAFUS")
 temp <- as.data.frame(Spp_aSMRcov[Spp_aSMRcov$Species %in% Spp,])##subset for selected species
 rownames(temp) <- temp$Species
@@ -422,13 +422,22 @@ for(i in 1:length(Spp)){
   dat$r <- dat$r/sum(dat$r)###have to standardise
   mu <- dat$x[dat$r == max(dat$r)] ###start optimisation at maximum so doesn't get stuck
   
-  g.fit <- nls(r ~ k*exp(-1/2*(x-mu)^2/sigma^2), start=c(mu=mu,sigma=1,k=0.5) , data = dat)###Non-linear least-squares regression using gaussian formula
-  v <- summary(g.fit)$parameters[,"Estimate"] ###v contains the three parameters for the best fit curve
-  points(r ~ x, data = dat, pch = 4, col = cols[i])
-  plot(function(x) v[3]*exp(-1/2*(x-v[1])^2/v[2]^2),col=cols[i],add=T,xlim=range(dat$x))
+  g.fit <- try(nls(r ~ k*exp(-1/2*(x-mu)^2/sigma^2), start=c(mu=mu,sigma=1,k=0.5) , data = dat, nls.control(maxiter = 1000, minFactor = 0.000001)))###Non-linear least-squares regression using gaussian formula
+  if(isTRUE(class(g.fit)=="try-error")){ ####if it doesn't work, try again now setting the mean to the maximum value (usually 8)
+    points(r ~ x, data = dat, pch = 4, col = cols[i])
+    dat$r <- jitter(dat$r)
+    g.fit <- nls(r ~ k*exp(-1/2*(x-mu)^2/sigma^2), start=c(sigma=1,k=0.5) , data = dat, nls.control(maxiter = 1000, minFactor = 0.000001))###Non-linear least-squares regression using gaussian formula
+    v <- summary(g.fit)$parameters[,"Estimate"] ###v contains the three parameters for the best fit curve
+    plot(function(x) v[2]*exp(-1/2*(x-mu)^2/v[1]^2),col=cols[i],add=T,xlim=range(dat$x))
+  }else{
+    v <- summary(g.fit)$parameters[,"Estimate"] ###v contains the three parameters for the best fit curve
+    points(r ~ x, data = dat, pch = 4, col = cols[i])
+    plot(function(x) v[3]*exp(-1/2*(x-v[1])^2/v[2]^2),col=cols[i],add=T,xlim=range(dat$x))
+  }
 }
 legend("topright", Spp, col = cols, pch = 15, cex = 0.8)
 dev.off() 
+
 
 
 ####End Kiri#########
