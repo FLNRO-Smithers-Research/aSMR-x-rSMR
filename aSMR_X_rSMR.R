@@ -274,7 +274,8 @@ for(j in unique(comp$Zone)){
 
   ##################Calculating the estimated aSMR value of species in the BECMaster
   ####Create Plots BGC & edatopic position data frame
-  load("VegDat_Clean.RData")
+  load("rSMR_aSMR_Both.RData")
+    load("VegDat_Clean.RData")
  PlotCount <- count (vegData, c("PlotNumber"))
  #PlotCount2 <- aggregate(Species ~ PlotNumber, vegData, length)
  PlotCount3 <- as.data.frame (unique(vegData$PlotNumber)) 
@@ -483,10 +484,11 @@ Spp_Ind <- Spp_Ind[,c(1,2)]
 write.csv(Spp_Ind, file= "Spp_SMRInd.csv")
 save(Spp_Ind,file = "Spp_aSMR_Ind.RData")
 
-#__________________________________###
+#_____WILL _____________________________###
+###########Create smr indicator summaries by plot
 load("Spp_aSMR_Ind.RData")
 
-###########Create smr indicator summaries by plot
+
 #Spp_Ind2 <- unlist(lapply(Spp_Ind$SMR_Ind, tolower))
 vegDataSMR <- merge(vegData, Spp_Ind, by.x = "Species", all.x = TRUE) ##add indicator value to species
 ##reduce to sum of indicator classes by plot
@@ -514,17 +516,17 @@ ifelse(((vegDataSMR2$TD0>=20) & (vegDataSMR2$TD1 + vegDataSMR2$TD2 + vegDataSMR2
 Plot_aSMR <- vegDataSMR2[,c("PlotNumber", "aSMR_Veg")]                                      
 
 #####Summarize plot aSMR by hierarchical unit
-SUhier <- read.csv("HierarchyTestExportICHxw.csv", stringsAsFactors = FALSE)
+SUhier <- read.csv("HierarchyTestExportSBSmc2.csv", stringsAsFactors = FALSE)
 colnames(SUhier)[1:12]=c("PlotNumber", "1Region", "2Class", "3Order", "4SubOrder", "5Alliance", "6SubAlliance", "7Association", "8SubAssociation", "9Facies", "10Working", "11SiteSeries")
 SUhierALL <-SUhier
 level <- "11SiteSeries"
 SUhier <- SUhier[,c("PlotNumber", level)]
 Plot_aSMR <- merge(Plot_aSMR, SUhier, by = "PlotNumber", all.x = FALSE)
 VegDataSMR3 <-merge(vegDataSMR2, SUhier, by = "PlotNumber", all.x = FALSE)
-write.csv(VegDataSMR3, file = "ICHxw_Plot_aSMR count.csv")
+write.csv(VegDataSMR3, file = "SBSmc2_Plot_aSMR count.csv")
 colnames(Plot_aSMR) [3] <- "SiteSeries"
 SS_aSMR <- dcast (Plot_aSMR, SiteSeries ~  aSMR_Veg, fun.aggregate = length)
-write.csv(SS_aSMR, file = "ICHxw_SiteSeries_aSMR count.csv")
+write.csv(SS_aSMR, file = "SBSmc2_SiteSeries_aSMR count.csv")
 #add function to add the expert and modelled aSMR to the veg assessment
 #SS_aSMR_compare <- merge(SS_aSMR, , by = "BGC", all.x = FALSE)  
 
