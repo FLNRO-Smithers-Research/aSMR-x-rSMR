@@ -77,6 +77,9 @@ wd <- tk_choose.dir(); setwd(wd)
 
 ####This part includes removing monthly CMD based on surplus (doesn't make much difference)#####
 allDat <- fread("BECv11_100Pt_Normal_1961_1990MSY.csv", data.table = FALSE) ###Climate data 1961-90for representative points per BGC 
+allDat <- fread("AlbertaSNR_500Pt_Normal_1961_1990MSY.csv", data.table = FALSE) ###Climate data 1961-90for representative points per BGC 
+allDat <- fread("USA_July12_TrainingPts_2_Normal_1961_1990MSY.csv", data.table = FALSE) ###Climate data 1961-90for representative points per BGC 
+
 temp <- allDat[,grep("CMD",colnames(allDat))]
 ###work on checking for excess summer moister leading to Moist zonal sites
 #temp2 <- allDat[,grep("PPT0", colnames(allDat))]
@@ -96,6 +99,7 @@ CMD <- aggregate( . ~ ID2, allDat, mean) ##
 Moist <- aggregate(ID1 ~ ID2 + Moist, temp2, length) # count of number of sites in each BGC meeting moist criteria
 BGC_Special <- fread("BGC_Special.csv", data.table = FALSE)
 CMD <- merge(CMD,BGC_Special, by.x = "ID2")
+
 ####To adjust in zones with prolonged snowpack
 CMD$CMDKiri <- ifelse(CMD$Special == "snow", CMD$CMD07+CMD$CMD08+CMD$CMD09, 
                  CMD$CMD02+CMD$CMD03+CMD$CMD04+CMD$CMD05+CMD$CMD06+CMD$CMD07+CMD$CMD08+CMD$CMD09)
@@ -114,14 +118,14 @@ CMD <- CMD[,c("ID2","CMD")]
 
 ###_____________________________________________####
 ###Option with just with ppt#######
-#allDat <- fread("BECv11_100Pt_Dat.csv", data.table = FALSE)
-#allDat <- allDat[,c("ID2","PPT_at","PPT_wt","CMD")]
-#allDat$PPT.dorm <- allDat$PPT_at + allDat$PPT_wt
-#CMD <- aggregate(cbind(PPT.dorm, CMD) ~ ID2, allDat, mean)###Mean by BGC
-#CMD$Def <- 225 - CMD$PPT.dorm ###adds deficit from incomplete recharge in dormant season. 
-#CMD$Def[CMD$Def < 0] <- 0
-#CMD$CMD <- CMD$CMD + CMD$Def
-#CMD <- CMD[,c("ID2","CMD")]
+allDat <- fread("AlbertaSNR_500Pt_Normal_1961_1990MSY.csv", data.table = FALSE)
+allDat <- allDat[,c("ID2","PPT_at","PPT_wt","CMD")]
+allDat$PPT.dorm <- allDat$PPT_at + allDat$PPT_wt
+CMD <- aggregate(cbind(PPT.dorm, CMD) ~ ID2, allDat, mean)###Mean by BGC
+CMD$Def <- 300 - CMD$PPT.dorm ###adds deficit from incomplete recharge in dormant season. 
+CMD$Def[CMD$Def < 0] <- 0
+CMD$CMD <- CMD$CMD + CMD$Def
+CMD <- CMD[,c("ID2","CMD")]
 ###_____________________________________________####
 
 ###for each wetter rSMR, previous CMD is divided by 2
@@ -194,7 +198,7 @@ colnames(test) <- colnames(CMD)
 test$BGC <- gsub("[[:space:]]","",test$BGC)
 SMRCross <- melt(test) ###aSMR lookup
 colnames(SMRCross) <- c("BGC", "rSMR", "aSMRC")
-write.csv(test, file= "modelled_rSMR_aSMR_grid_HalfStep.csv")
+write.csv(test, file= "modelled_USAv11_rSMR_aSMR_grid_HalfStep.csv")
 save(SMRCross,file = "rSMR_aSMR_CalcList.RData")
 load ("rSMR_aSMR_CalcList.RData")
 
